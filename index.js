@@ -7,7 +7,7 @@ app.use(express.json());
 
 const podcastRoutes = require('./api/routes/podcastRoutes');
 
-app.use('/api/podcasts', podcastRoutes);
+app.use('/api', podcastRoutes);
 
 // Routes
 app.get('/', (req, res) => {
