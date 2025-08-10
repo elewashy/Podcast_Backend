@@ -28,7 +28,7 @@ This is the backend for the Podcast application, providing APIs to fetch podcast
 
 1. Clone the repository:
    ```sh
-   git clone https://github.com/your-username/Podcast_Backend.git
+   git clone https://github.com/elewashy/Podcast_Backend.git
    ```
 2. Navigate to the project directory:
    ```sh
