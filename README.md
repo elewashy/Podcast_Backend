@@ -38,7 +38,7 @@ This is the backend for the Podcast application, providing APIs to fetch podcast
    ```sh
    npm install
    ```
-4. Create a `.env` file in the root directory and add your environment variables. You can use the `example.env` file as a template:
+4. Create a `.env` file in the root directory and add your environment variables. You can use the `.env.example` file as a template:
     ```
     PORT=3000
     YOUTUBE_API_KEY=your_youtube_api_key
