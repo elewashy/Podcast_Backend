@@ -54,10 +54,11 @@ This is the backend for the Podcast application, providing APIs to fetch podcast
 
 ## API Endpoints
 
-The base URL is `http://localhost:3000/api`.
+The base URL is `http://localhost:3000`.
 
-- `GET /podcasts/channel/:channelId`: Get all podcast episodes for a specific YouTube channel.
-- `GET /podcasts/video/:videoId`: Get details for a specific podcast video.
+- `GET /api/channels`: Get a list of all available YouTube channels.
+- `GET /api/channels/:channelId/playlists`: Get all playlists for a specific YouTube channel.
+- `GET /api/playlists/:playlistId/videos`: Get all videos for a specific playlist.
 
 ## Project Structure
 
