@@ -1,3 +1,5 @@
+const axios = require('axios');
+const cheerio = require('cheerio');
 const { google } = require('googleapis');
 
 const youtube = google.youtube({
@@ -11,26 +13,27 @@ const getAllChannels = async (req, res) => {
     const channelDetails = [];
 
     for (const channel of channels) {
-      const match = channel.channelUrl.match(/@(.+)/);
-      if (!match) continue; // Skip if URL format is invalid
-      const username = match[1];
+      try {
+        const { data } = await axios.get(`${channel.channelUrl}/playlists`);
+        const $ = cheerio.load(data);
 
-      const searchResponse = await youtube.search.list({
-        part: 'snippet',
-        q: username,
-        type: 'channel',
-        maxResults: 1,
-      });
+        const name = $('meta[property="og:title"]').attr('content');
+        const description = $('meta[property="og:description"]').attr('content');
+        const thumbnail = $('meta[property="og:image"]').attr('content');
+        const channelId = $('meta[itemprop="identifier"]').attr('content');
+        const channelUrl = `https://www.youtube.com/channel/${channelId}`
 
-      if (searchResponse.data.items.length > 0) {
-        const item = searchResponse.data.items[0];
+
         channelDetails.push({
-          id: item.snippet.channelId,
-          name: item.snippet.title,
-          description: item.snippet.description,
-          thumbnail: item.snippet.thumbnails.high.url,
-          channelUrl: `https://www.youtube.com/channel/${item.snippet.channelId}`
+          id: channelId,
+          name: name,
+          description: description,
+          thumbnail: thumbnail,
+          channelUrl: channelUrl
         });
+      } catch (error) {
+        console.error(`Failed to scrape channel: ${channel.channelUrl}`, error);
+        // Skip this channel and continue with the next one
       }
     }
 
