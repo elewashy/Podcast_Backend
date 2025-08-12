@@ -3,5 +3,45 @@
     "id": "waie",
     "name": "وعي",
     "channelUrl": "https://www.youtube.com/@waie"
+  },
+  {
+    "id": "eh_elmoshkela",
+    "name": "إيه المشكلة",
+    "channelUrl": "https://www.youtube.com/@eh_elmoshkela"
+  },
+  {
+    "id": "sherifali",
+    "name": "شريف علي",
+    "channelUrl": "https://www.youtube.com/@sherifali"
+  },
+  {
+    "id": "ahmedamer",
+    "name": "أحمد عامر",
+    "channelUrl": "https://www.youtube.com/@ahmedamer"
+  },
+  {
+    "id": "mohelghaleez",
+    "name": "محمد الغليظ",
+    "channelUrl": "https://www.youtube.com/@mohelghaleez"
+  },
+  {
+    "id": "ameermoneer",
+    "name": "أمير منير",
+    "channelUrl": "https://www.youtube.com/@ameermoneer"
+  },
+  {
+    "id": "yassermamdouh",
+    "name": "ياسر ممدوح",
+    "channelUrl": "https://www.youtube.com/@yassermamdouh"
+  },
+  {
+    "id": "alaahamed",
+    "name": "علاء حامد",
+    "channelUrl": "https://www.youtube.com/@alaahamed"
+  },
+  {
+    "id": "mostafaaladwy",
+    "name": "الشيخ مصطفى العدوي",
+    "channelUrl": "https://www.youtube.com/@mostafaaladwy"
   }
 ]
