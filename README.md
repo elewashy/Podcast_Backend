@@ -15,14 +15,14 @@ This is the backend for the Podcast application, providing APIs to fetch podcast
 - **Node.js**: JavaScript runtime environment.
 - **Express.js**: Web framework for Node.js.
 - **dotenv**: To manage environment variables.
-- **googleapis**: To interact with YouTube Data API v3.
+- **axios**: To make HTTP requests.
+- **cheerio**: For web scraping.
 
 ## Getting Started
 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/en/) installed on your machine.
-- A YouTube API Key. You can get one from the [Google Cloud Console](https://console.cloud.google.com/).
 
 ### Installation
 
@@ -38,11 +38,10 @@ This is the backend for the Podcast application, providing APIs to fetch podcast
    ```sh
    npm install
    ```
-4. Create a `.env` file in the root directory and add your environment variables. You can use the `.env.example` file as a template:
-    ```
-    PORT=3000
-    YOUTUBE_API_KEY=your_youtube_api_key
-    ```
+4. Create a `.env` file in the root directory and add your environment variables.
+   ```
+   PORT=3000
+   ```
 5. Start the server:
    ```sh
    npm start
