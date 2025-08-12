@@ -1,11 +1,5 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-const { google } = require('googleapis');
-
-const youtube = google.youtube({
-  version: 'v3',
-  auth: process.env.YOUTUBE_API_KEY,
-});
 
 const getAllChannels = async (req, res) => {
   try {
@@ -51,20 +45,83 @@ const getPlaylistsByChannelId = async (req, res) => {
       return res.status(400).json({ error: 'Channel ID is required' });
     }
 
-    const playlistResponse = await youtube.playlists.list({
-      part: 'snippet,contentDetails',
-      channelId: channelId,
-      maxResults: 50,
+    const channelUrl = `https://www.youtube.com/channel/${channelId}/playlists`;
+    const { data: html } = await axios.get(channelUrl);
+    
+    const $ = cheerio.load(html);
+    const channelTitle = $('meta[property="og:title"]').attr('content') || '';
+
+    let ytInitialData;
+    $('script').each((i, el) => {
+      const scriptContent = $(el).html();
+      if (scriptContent && scriptContent.trim().startsWith('var ytInitialData =')) {
+        const jsonDataStr = scriptContent.split(';')[0].replace('var ytInitialData =', '').trim();
+        try {
+          ytInitialData = JSON.parse(jsonDataStr);
+          return false; // Exit loop once found
+        } catch (e) {
+          console.error('Failed to parse ytInitialData', e);
+        }
+      }
     });
 
-    const formattedPlaylists = playlistResponse.data.items.map(item => ({
-      id: item.id,
-      title: item.snippet.title,
-      description: item.snippet.description,
-      thumbnail: item.snippet.thumbnails.high.url,
-      itemCount: item.contentDetails.itemCount,
-      channelTitle: item.snippet.channelTitle,
-    }));
+    if (!ytInitialData) {
+      return res.status(500).json({ error: 'Could not find or parse ytInitialData.' });
+    }
+
+    const tabs = ytInitialData.contents?.twoColumnBrowseResultsRenderer?.tabs;
+    const selectedTab = tabs?.find(tab => tab.tabRenderer?.selected);
+    const contents = selectedTab?.tabRenderer?.content?.sectionListRenderer?.contents;
+
+    if (!contents) {
+      return res.json([]);
+    }
+
+    let playlistItems = [];
+    for (const section of contents) {
+      const sectionContents = section.itemSectionRenderer?.contents;
+      if (!sectionContents) continue;
+
+      for (const content of sectionContents) {
+        if (content.gridRenderer?.items) {
+          playlistItems = playlistItems.concat(content.gridRenderer.items);
+        } else if (content.shelfRenderer?.content?.horizontalListRenderer?.items) {
+          playlistItems = playlistItems.concat(content.shelfRenderer.content.horizontalListRenderer.items);
+        }
+      }
+    }
+
+    const formattedPlaylists = playlistItems.map(item => {
+      // Handle gridPlaylistRenderer structure
+      const playlistData = item.gridPlaylistRenderer;
+      if (playlistData) {
+        return {
+          id: playlistData.playlistId,
+          title: playlistData.title?.simpleText || playlistData.title?.runs?.[0]?.text,
+          description: '',
+          thumbnail: playlistData.thumbnail?.thumbnails?.pop()?.url,
+          itemCount: parseInt(playlistData.videoCountText?.runs?.[0]?.text) || 0,
+          channelTitle: channelTitle,
+        };
+      }
+
+      // Handle lockupViewModel structure (from user's example)
+      const lockup = item.lockupViewModel;
+      if (lockup) {
+        const overlayText = lockup.contentImage?.collectionThumbnailViewModel?.primaryThumbnail?.thumbnailViewModel?.overlays?.[0]?.thumbnailOverlayBadgeViewModel?.thumbnailBadges?.[0]?.thumbnailBadgeViewModel?.text;
+        const itemCount = overlayText ? parseInt(overlayText) : 0;
+        
+        return {
+           id: lockup.contentId,
+           title: lockup.metadata?.lockupMetadataViewModel?.title?.content,
+           description: '',
+           thumbnail: lockup.contentImage?.collectionThumbnailViewModel?.primaryThumbnail?.thumbnailViewModel?.image?.sources?.[0]?.url,
+           itemCount: itemCount,
+           channelTitle: channelTitle,
+       };
+      }
+      return null;
+    }).filter(Boolean);
 
     res.json(formattedPlaylists);
   } catch (error) {
@@ -76,19 +133,55 @@ const getPlaylistsByChannelId = async (req, res) => {
 const getVideosByPlaylistId = async (req, res) => {
   try {
     const { playlistId } = req.params;
-    const response = await youtube.playlistItems.list({
-      part: 'snippet,contentDetails',
-      playlistId: playlistId,
-      maxResults: 50, // Adjust as needed
+    if (!playlistId) {
+      return res.status(400).json({ error: 'Playlist ID is required' });
+    }
+
+    const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
+    const { data: html } = await axios.get(playlistUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      },
+    });
+    
+    const $ = cheerio.load(html);
+
+    let ytInitialData;
+    $('script').each((i, el) => {
+      const scriptContent = $(el).html();
+      if (scriptContent && scriptContent.trim().startsWith('var ytInitialData =')) {
+        const jsonDataStr = scriptContent.split(';')[0].replace('var ytInitialData =', '').trim();
+        try {
+          ytInitialData = JSON.parse(jsonDataStr);
+          return false; // Exit loop once found
+        } catch (e) {
+          console.error('Failed to parse ytInitialData', e);
+        }
+      }
     });
 
-    const formattedVideos = response.data.items.map(item => ({
-      id: item.contentDetails.videoId,
-      title: item.snippet.title,
-      description: item.snippet.description,
-      thumbnail: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.default?.url,
-      publishedAt: item.snippet.publishedAt,
-    }));
+    if (!ytInitialData) {
+      return res.status(500).json({ error: 'Could not find or parse ytInitialData.' });
+    }
+
+    const videoItems = ytInitialData.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.[0]?.playlistVideoListRenderer?.contents;
+
+    if (!videoItems) {
+      return res.json([]);
+    }
+
+    const formattedVideos = videoItems.map(item => {
+      const videoData = item.playlistVideoRenderer;
+      if (!videoData) return null;
+      
+      return {
+        id: videoData.videoId,
+        title: videoData.title?.runs?.[0]?.text || videoData.title?.simpleText,
+        description: '', // Description is not available in this data structure
+        thumbnail: videoData.thumbnail?.thumbnails?.pop()?.url,
+        publishedAt: videoData.videoInfo?.runs?.[2]?.text || '', // This will be like "7 months ago"
+      };
+    }).filter(Boolean);
 
     res.json(formattedVideos);
   } catch (error) {
