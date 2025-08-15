@@ -4,6 +4,116 @@ const cheerio = require('cheerio');
 // Cache duration for HTTP headers (in seconds)
 const CACHE_DURATION_SECONDS = 10 * 60; // 10 minutes
 
+// Function to fetch download links for a video from ssyoutube.online
+const fetchVideoDownloadLinks = async (videoId) => {
+  try {
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const ssyoutubeUrl = "https://ssyoutube.online/yt-video-detail/";
+    
+    const headers = {
+      "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+      "accept-language": "en-US,en-GB;q=0.9,en;q=0.8,ar-EG;q=0.7,ar;q=0.6",
+      "cache-control": "max-age=0",
+      "content-type": "application/x-www-form-urlencoded",
+      "dnt": "1",
+      "origin": "https://ssyoutube.online",
+      "priority": "u=0, i",
+      "referer": "https://ssyoutube.online/en1/",
+      "sec-ch-ua": '"Not)A;Brand";v="8", "Chromium";v="138", "Google Chrome";v="138"',
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": '"Windows"',
+      "sec-fetch-dest": "document",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-site": "same-origin",
+      "upgrade-insecure-requests": "1",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+    };
+
+    const formData = new URLSearchParams();
+    formData.append('videoURL', videoUrl);
+
+    const response = await axios.post(ssyoutubeUrl, formData.toString(), {
+      headers,
+      timeout: 15000 // 15 seconds timeout
+    });
+
+    const $ = cheerio.load(response.data);
+    const downloads = [];
+
+    // Extract download links from table rows
+    let tableRowSelector = 'tbody tr';
+    if ($('tbody tr').length === 0) {
+      tableRowSelector = 'tr'; // Fallback if no tbody
+    }
+    
+    $(tableRowSelector).each((index, row) => {
+      const $row = $(row);
+      const $button = $row.find('button[data-url]');
+      
+      if ($button.length > 0) {
+        const url = $button.attr('data-url');
+        const quality = $button.attr('data-quality') || $row.find('td:first-child').text().trim().split('\n')[0].trim();
+        const hasAudio = $button.attr('data-has-audio') || 'N/A';
+        const size = $row.find('td:nth-child(2)').text().trim();
+        
+        // Check if it's audio by looking for text indicators or file type
+        const firstCell = $row.find('td:first-child').text().trim();
+        const hasVideoQuality = /\d+p/i.test(firstCell); // Check for 720p, 1080p, etc.
+        const hasAudioFormat = /m4a|mp3|aac|audio/i.test(firstCell);
+        const hasDataHasAudioFalse = hasAudio === 'false';
+        
+        // It's audio if: has audio format OR (no video quality AND not explicitly marked as no audio)
+        const isAudio = hasAudioFormat || (!hasVideoQuality && !hasDataHasAudioFalse);
+        
+        const downloadItem = {
+          url: url,
+          quality: quality,
+          hasAudio: isAudio ? 'true' : hasAudio,
+          size: size,
+          type: isAudio ? 'audio' : 'video'
+        };
+        
+        downloads.push(downloadItem);
+      }
+    });
+    
+    // Fallback: if no downloads found in tables, try original button selector
+    if (downloads.length === 0) {
+      $('button[data-url]').each((index, element) => {
+        const button = $(element);
+        downloads.push({
+          url: button.attr('data-url'),
+          quality: button.attr('data-quality') || 'N/A',
+          hasAudio: button.attr('data-has-audio') || 'N/A',
+          size: 'N/A',
+          type: 'unknown'
+        });
+      });
+    }
+
+    // Organize downloads by type
+    const audioLinks = downloads.filter(download => download.type === 'audio');
+    const videoLinks = downloads.filter(download => download.type === 'video');
+
+    return {
+      success: true,
+      audioLinks,
+      videoLinks,
+      allDownloads: downloads
+    };
+
+  } catch (error) {
+    console.error(`Error fetching download links for video ${videoId}:`, error.message);
+    return {
+      success: false,
+      error: error.message,
+      audioLinks: [],
+      videoLinks: [],
+      allDownloads: []
+    };
+  }
+};
+
 const getAllChannels = async (req, res) => {
   try {
     const channels = require('../data/channels.json');
@@ -212,6 +322,7 @@ const getVideosByPlaylistId = async (req, res) => {
       return res.json([]);
     }
 
+    // Format basic video data first
     const formattedVideos = videoItems.map(item => {
       const videoData = item.playlistVideoRenderer;
       if (!videoData) return null;
@@ -225,10 +336,71 @@ const getVideosByPlaylistId = async (req, res) => {
       };
     }).filter(Boolean);
 
-    res.json(formattedVideos);
+    // Check if user wants download links
+    const includeDownloads = req.query.includeDownloads === 'true';
+    
+    if (includeDownloads && formattedVideos.length > 0) {
+      // Fetch download links for all videos in parallel - keeping it fast!
+      const downloadPromises = formattedVideos.map(async (video) => {
+        const downloadData = await fetchVideoDownloadLinks(video.id);
+        return {
+          ...video,
+          downloads: {
+            success: downloadData.success,
+            audioLinks: downloadData.audioLinks,
+            videoLinks: downloadData.videoLinks,
+            error: downloadData.error || null
+          }
+        };
+      });
+
+      // Wait for all download requests to complete
+      const videosWithDownloads = await Promise.all(downloadPromises);
+      res.json(videosWithDownloads);
+    } else {
+      res.json(formattedVideos);
+    }
   } catch (error) {
     console.error(`Error in getVideosByPlaylistId for playlist ${req.params.playlistId}:`, error.message);
     res.status(500).json({ error: 'Something went wrong' });
+  }
+};
+
+// Endpoint to get download links for a single video
+const getVideoDownloadLinks = async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    if (!videoId) {
+      return res.status(400).json({ error: 'Video ID is required' });
+    }
+
+    // Set cache headers for download links (shorter cache time as links may expire)
+    res.set({
+      'Cache-Control': `public, max-age=1800, s-maxage=1800`, // 30 minutes
+      'ETag': `"downloads-${videoId}-${Date.now()}"`,
+      'Vary': 'Accept-Encoding'
+    });
+
+    const downloadData = await fetchVideoDownloadLinks(videoId);
+    
+    const response = {
+      videoId,
+      success: downloadData.success,
+      audioLinks: downloadData.audioLinks,
+      videoLinks: downloadData.videoLinks,
+      totalLinks: downloadData.allDownloads.length,
+      error: downloadData.error || null,
+      timestamp: new Date().toISOString()
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error(`Error in getVideoDownloadLinks for video ${req.params.videoId}:`, error.message);
+    res.status(500).json({ 
+      error: 'Failed to fetch download links',
+      videoId: req.params.videoId,
+      success: false 
+    });
   }
 };
 
@@ -240,4 +412,5 @@ module.exports = {
   getAllChannels,
   getPlaylistsByChannelId,
   getVideosByPlaylistId,
+  getVideoDownloadLinks,
 };
