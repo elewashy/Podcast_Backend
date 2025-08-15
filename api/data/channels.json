@@ -51,7 +51,17 @@
   },
   {
     "id": "DroosOnline4u",
-    "name": "دروس أونلاين (يضم محتوى أحمد أبو زيد)",
+    "name": "دروس أونلاين",
     "channelUrl": "https://www.youtube.com/@DroosOnline4u"
+  },
+  {
+    "id": "Alqtami",
+    "name": "الشيخ ناصر القطامي",
+    "channelUrl": "https://www.youtube.com/@Alqtami"
+  },
+  {
+    "id": "Yasseraldosry",
+    "name": "الشيخ ياسر بن راشد الدوسري",
+    "channelUrl": "https://www.youtube.com/@Yasseraldosry"
   }
 ]
