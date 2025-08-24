@@ -404,10 +404,6 @@ const getVideoDownloadLinks = async (req, res) => {
   }
 };
 
-const getAllPodcasts = (req, res) => {
-  res.json(podcasts);
-};
-
 module.exports = {
   getAllChannels,
   getPlaylistsByChannelId,
